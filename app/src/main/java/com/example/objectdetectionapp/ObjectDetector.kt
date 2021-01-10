@@ -4,6 +4,7 @@ import android.annotation.SuppressLint
 import android.graphics.Bitmap
 import android.graphics.RectF
 import android.media.Image
+import android.util.Log
 import android.util.Size
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
@@ -19,7 +20,11 @@ typealias ObjectDetectorCallback = (image: List<DetectionObject>) -> Unit
 
 /**
  * CameraXの物体検知の画像解析ユースケース
- * [listener] コールバックで解析結果のリストを受け取る
+ * @param yuvToRgbConverter カメラ画像のImageバッファYUV_420_888からRGB形式に変換する
+ * @param interpreter tfliteモデルを操作するライブラリ
+ * @param labels 正解ラベルのリスト
+ * @param resultViewSize 結果を表示するsurfaceViewのサイズ
+ * @param listener コールバックで解析結果のリストを受け取る
  */
 class ObjectDetector(
     private val yuvToRgbConverter: YuvToRgbConverter,
@@ -46,9 +51,9 @@ class ObjectDetector(
     private var imageRotationDegrees: Int = 0
     private val tfImageProcessor by lazy {
         ImageProcessor.Builder()
-            .add(ResizeOp(IMG_SIZE_X, IMG_SIZE_Y, ResizeOp.ResizeMethod.BILINEAR))
-            .add(Rot90Op(-imageRotationDegrees / 90))
-            .add(NormalizeOp(NORMALIZE_MEAN, NORMALIZE_STD))
+            .add(ResizeOp(IMG_SIZE_X, IMG_SIZE_Y, ResizeOp.ResizeMethod.BILINEAR)) // モデルのinputに合うように画像のリサイズ
+            .add(Rot90Op(-imageRotationDegrees / 90)) // 流れてくるImageProxyは90度回転しているのでその補正
+            .add(NormalizeOp(NORMALIZE_MEAN, NORMALIZE_STD)) // normalization関連
             .build()
     }
 
@@ -93,16 +98,14 @@ class ObjectDetector(
         image.close()
     }
 
-    @Suppress("UNCHECKED_CAST")
+    // 画像をYUV -> RGB bitmap -> tensorflowImage -> tensorflowBufferに変換して推論し結果をリストとして出力
     private fun detect(targetImage: Image): List<DetectionObject> {
         val targetBitmap = Bitmap.createBitmap(targetImage.width, targetImage.height, Bitmap.Config.ARGB_8888)
-        yuvToRgbConverter.yuvToRgb(targetImage, targetBitmap)
+        yuvToRgbConverter.yuvToRgb(targetImage, targetBitmap) // rgbに変換
         tfImageBuffer.load(targetBitmap)
         val tensorImage = tfImageProcessor.process(tfImageBuffer)
 
-        /**
-         * tfliteモデルで推論の実行
-         */
+        //tfliteモデルで推論の実行
         interpreter.runForMultipleInputsOutputs(arrayOf(tensorImage.buffer), outputMap)
 
         // 推論結果を整形してリストにして返す

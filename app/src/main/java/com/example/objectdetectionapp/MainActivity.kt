@@ -41,14 +41,14 @@ class MainActivity : AppCompatActivity() {
         Interpreter(loadModel())
     }
 
-    // カメラのYUV画像をRGBに変換するコンバータ
-    private val yuvToRgbConverter: YuvToRgbConverter by lazy {
-        YuvToRgbConverter(this)
-    }
-
     // モデルの正解ラベルリスト
     private val labels: List<String> by lazy {
         loadLabels()
+    }
+
+    // カメラのYUV画像をRGBに変換するコンバータ
+    private val yuvToRgbConverter: YuvToRgbConverter by lazy {
+        YuvToRgbConverter(this)
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -57,6 +57,7 @@ class MainActivity : AppCompatActivity() {
         overlaySurfaceView = OverlaySurfaceView(resultView)
 
         cameraExecutor = Executors.newSingleThreadExecutor()
+        // permissionDispatcherでsetUpCamera()メソッドをコール
         setupCameraWithPermissionCheck()
     }
 
@@ -84,9 +85,7 @@ class MainActivity : AppCompatActivity() {
             // プレビューユースケース
             val preview = Preview.Builder()
                 .build()
-                .also {
-                    it.setSurfaceProvider(cameraView.surfaceProvider)
-                }
+                .also { it.setSurfaceProvider(cameraView.surfaceProvider) }
 
             // 背面カメラを使用
             val cameraSelector = CameraSelector.DEFAULT_BACK_CAMERA
@@ -105,6 +104,7 @@ class MainActivity : AppCompatActivity() {
                             labels,
                             Size(resultView.width, resultView.height)
                         ) { detectedObjectList ->
+                            // 解析結果の表示
                             overlaySurfaceView.draw(detectedObjectList)
                         }
                     )
